@@ -9,3 +9,7 @@ J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp
 J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\Newtonsoft.Json.dll
 J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\Newtonsoft.Json.pdb
 J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\Newtonsoft.Json.xml
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\obj\Debug\speakDemoApp.AddDeviceForm.resources
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\speakDemoApp.exe.config
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\TCPHelper.dll
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\TCPHelper.pdb

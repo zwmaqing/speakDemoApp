@@ -31,6 +31,7 @@
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.btn_AddDevice = new System.Windows.Forms.Button();
             this.tree_Area = new System.Windows.Forms.TreeView();
             this.btn_RetrieveArea = new System.Windows.Forms.Button();
             this.label9 = new System.Windows.Forms.Label();
@@ -63,6 +64,8 @@
             this.lab_sendCount = new System.Windows.Forms.Label();
             this.cmb_BitsPerSample = new System.Windows.Forms.ComboBox();
             this.label10 = new System.Windows.Forms.Label();
+            this.label5 = new System.Windows.Forms.Label();
+            this.btn_SendTCP = new System.Windows.Forms.Button();
             this.groupBox1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dGrid_devList)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numb_FrameInterval)).BeginInit();
@@ -70,6 +73,7 @@
             // 
             // groupBox1
             // 
+            this.groupBox1.Controls.Add(this.btn_AddDevice);
             this.groupBox1.Controls.Add(this.tree_Area);
             this.groupBox1.Controls.Add(this.btn_RetrieveArea);
             this.groupBox1.Controls.Add(this.label9);
@@ -86,6 +90,16 @@
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "收听设备";
             // 
+            // btn_AddDevice
+            // 
+            this.btn_AddDevice.Location = new System.Drawing.Point(264, 11);
+            this.btn_AddDevice.Name = "btn_AddDevice";
+            this.btn_AddDevice.Size = new System.Drawing.Size(75, 21);
+            this.btn_AddDevice.TabIndex = 14;
+            this.btn_AddDevice.Text = "添加设备";
+            this.btn_AddDevice.UseVisualStyleBackColor = true;
+            this.btn_AddDevice.Click += new System.EventHandler(this.btn_AddDevice_Click);
+            // 
             // tree_Area
             // 
             this.tree_Area.CheckBoxes = true;
@@ -94,7 +108,8 @@
             this.tree_Area.Size = new System.Drawing.Size(205, 212);
             this.tree_Area.TabIndex = 13;
             this.toolTip1.SetToolTip(this.tree_Area, "选择将要收听录音播报的区域");
-            this.tree_Area.MouseClick += new System.Windows.Forms.MouseEventHandler(this.tree_Area_MouseClick);
+            this.tree_Area.BeforeCheck += new System.Windows.Forms.TreeViewCancelEventHandler(this.tree_Area_BeforeCheck);
+            this.tree_Area.Leave += new System.EventHandler(this.tree_Area_Leave);
             // 
             // btn_RetrieveArea
             // 
@@ -148,6 +163,7 @@
             this.dGrid_devList.ShowRowErrors = false;
             this.dGrid_devList.Size = new System.Drawing.Size(422, 239);
             this.dGrid_devList.TabIndex = 8;
+            this.dGrid_devList.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dGrid_devList_CellClick);
             // 
             // AliasName
             // 
@@ -396,11 +412,32 @@
             this.label10.TabIndex = 18;
             this.label10.Text = "编码位:";
             // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(484, 533);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(41, 12);
+            this.label5.TabIndex = 19;
+            this.label5.Text = "label5";
+            // 
+            // btn_SendTCP
+            // 
+            this.btn_SendTCP.Location = new System.Drawing.Point(196, 519);
+            this.btn_SendTCP.Name = "btn_SendTCP";
+            this.btn_SendTCP.Size = new System.Drawing.Size(75, 23);
+            this.btn_SendTCP.TabIndex = 20;
+            this.btn_SendTCP.Text = "SendTCP";
+            this.btn_SendTCP.UseVisualStyleBackColor = true;
+            this.btn_SendTCP.Click += new System.EventHandler(this.btn_SendTCP_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(678, 554);
+            this.Controls.Add(this.btn_SendTCP);
+            this.Controls.Add(this.label5);
             this.Controls.Add(this.label10);
             this.Controls.Add(this.cmb_BitsPerSample);
             this.Controls.Add(this.lab_sendCount);
@@ -468,6 +505,9 @@
         private System.Windows.Forms.DataGridViewTextBoxColumn SoftwareVersion;
         private System.Windows.Forms.Button btn_RetrieveArea;
         private System.Windows.Forms.TreeView tree_Area;
+        private System.Windows.Forms.Button btn_AddDevice;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.Button btn_SendTCP;
     }
 }
 

@@ -1,0 +1,14 @@
+E:\Project2017-qingtian\Socket异步请求Server\TCPHelper\bin\Debug\TCPHelper.dll
+E:\Project2017-qingtian\Socket异步请求Server\TCPHelper\bin\Debug\TCPHelper.pdb
+E:\Project2017-qingtian\Socket异步请求Server\TCPHelper\obj\Debug\TCPHelper.dll
+E:\Project2017-qingtian\Socket异步请求Server\TCPHelper\obj\Debug\TCPHelper.pdb
+C:\Users\35429\Downloads\Socket异步请求Server\Socket异步请求Server\TCPHelper\bin\Debug\TCPHelper.dll
+C:\Users\35429\Downloads\Socket异步请求Server\Socket异步请求Server\TCPHelper\bin\Debug\TCPHelper.pdb
+C:\Users\35429\Downloads\Socket异步请求Server\Socket异步请求Server\TCPHelper\obj\Debug\TCPHelper.csprojResolveAssemblyReference.cache
+C:\Users\35429\Downloads\Socket异步请求Server\Socket异步请求Server\TCPHelper\obj\Debug\TCPHelper.dll
+C:\Users\35429\Downloads\Socket异步请求Server\Socket异步请求Server\TCPHelper\obj\Debug\TCPHelper.pdb
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\TCPHelper\bin\Debug\TCPHelper.dll
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\TCPHelper\bin\Debug\TCPHelper.pdb
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\TCPHelper\obj\Debug\TCPHelper.csprojResolveAssemblyReference.cache
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\TCPHelper\obj\Debug\TCPHelper.dll
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\TCPHelper\obj\Debug\TCPHelper.pdb

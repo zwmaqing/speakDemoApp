@@ -16,6 +16,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
+using TCPHelper;
 
 namespace speakDemoApp
 {
@@ -62,8 +63,8 @@ namespace speakDemoApp
             timer_AudioRequest.Interval = 400;
 
             timer_Countdown.Tick += Timer_Countdown_Tick;
-        }
 
+        }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -85,6 +86,7 @@ namespace speakDemoApp
                 confirmReceiveUdpClient.Close();
                 threadConfirmReceive.Abort();
             }
+
 
         }
 
@@ -158,6 +160,9 @@ namespace speakDemoApp
 
         private String fileName;
         private String filePath;
+
+        //TCP 通信
+        private ClientAsync tcpClient;
 
         //收发文件数据
 
@@ -316,6 +321,9 @@ namespace speakDemoApp
         /// <param name="e"></param>
         private void btn_RecordAudio_MouseDown(object sender, MouseEventArgs e)
         {
+            //是否需要协商端口
+            //协商端口
+
             //开始录音
             fileName = DateTime.Now.ToString("HHmmss") + ".wav";
 
@@ -984,7 +992,7 @@ namespace speakDemoApp
 
             foreach (var one in BindDeviceList)
             {
-                if (one.Type == "IP")
+                if (one.Type == "IPTRUMPET")
                 {
                     TreeNode node = new TreeNode();
                     node.Name = one.AliasName;
@@ -992,8 +1000,9 @@ namespace speakDemoApp
                     node.ToolTipText = one.SN;
                     node.Tag = one;
                     tree_Area.Nodes.Add(node);//插入
+
                 }
-                else if (one.Type == "AMPLIFIER")
+                else if (one.Type == "IPCHPOWER")
                 {
                     TreeNode node = new TreeNode();//设备节点
                     node.Name = one.AliasName;
@@ -1093,7 +1102,7 @@ namespace speakDemoApp
             {
                 deviceInfo theDev = (deviceInfo)oneDev.Tag;
                 //添加IP喇叭
-                if (theDev.Type == "IP")
+                if (theDev.Type == "IPTRUMPET")
                 {
                     if (oneDev.Checked)
                     {
@@ -1233,6 +1242,147 @@ namespace speakDemoApp
             threadConfirmReceive.Start();
         }
 
+        //TCP通信协议
+
+        private void regTcpClientEventMethod()
+        {
+            tcpClient.Completed += new Action<TcpClient, EnSocketAction>((c, enAction) =>
+            {
+                if (enAction == EnSocketAction.ConnectTimeOut)
+                {
+                    rText_RecordList.Invoke(new MethodInvoker(
+                                delegate
+                                {
+                                    rText_RecordList.Text += String.Format("连接服务端超时!");
+                                }
+                                ));
+                    return;
+                }
+                IPEndPoint iep = c.Client.RemoteEndPoint as IPEndPoint;
+                string key = string.Format("{0}:{1}", iep.Address.ToString(), iep.Port);
+                switch (enAction)
+                {
+                    case EnSocketAction.Connect:
+                        {
+                            rText_RecordList.Invoke(new MethodInvoker(
+        delegate
+        {
+            rText_RecordList.Text += String.Format("已经与{0}建立连接", key);
+        }
+        ));
+
+                            break;
+                        }
+                    case EnSocketAction.SendMsg:
+                        rText_RecordList.Invoke(new MethodInvoker(
+                                delegate
+                                {
+                                    rText_RecordList.Text += String.Format("{0}：向{1}发送了一条消息", DateTime.Now, key);
+                                }
+                                ));
+                        break;
+                    case EnSocketAction.Close:
+                        rText_RecordList.Invoke(new MethodInvoker(
+                                delegate
+                                {
+                                    rText_RecordList.Text += String.Format("服务端连接关闭");
+                                }
+                                ));
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+
+        }
+
+        private void checkDeviceOnlineTcp(string remoteIP, int port)
+        {
+            tcpClient = new ClientAsync();
+
+            tcpClient.Completed += new Action<TcpClient, EnSocketAction>((c, enAction) =>
+            {
+                switch (enAction)
+                {
+                    case EnSocketAction.ConnectTimeOut:
+                        {
+                            rText_RecordList.Invoke(new MethodInvoker(
+                                delegate
+                                {
+                                    rText_RecordList.Text += String.Format("连接服务端超时!");
+                                }
+                                ));
+                            break;
+                        }
+                    case EnSocketAction.Connect:
+                        {
+                            var localIP = GetLocalIP();//获取电脑当前本地IP
+
+                            SearchCmd cmd = new SearchCmd("SearchDev", localIP);
+                            var searchCMD = JsonConvert.SerializeObject(cmd);
+                            tcpClient.SendAsync(searchCMD);
+                            break;
+                        }
+                }
+            });
+
+            tcpClient.Received += new Action<string, string>((key, msg) =>
+            {
+                rText_RecordList.Invoke(new MethodInvoker(
+                              delegate
+                              {
+                                  rText_RecordList.Text += String.Format("收到{0}发来的信息：{1}", key, msg);
+                              }
+                              ));
+            });
+
+            tcpClient.ConnectAsync(remoteIP, port);
+        }
+
+        private void tree_Area_Leave(object sender, EventArgs e)
+        {
+            // label5.Text = "tree_Area_Leave";
+        }
+
+        private void btn_AddDevice_Click(object sender, EventArgs e)
+        {
+            AddDeviceForm addform = new AddDeviceForm();
+            addform.ShowDialog(this);
+        }
+
+        private void tree_Area_BeforeCheck(object sender, TreeViewCancelEventArgs e)
+        {
+            if (e.Node.Checked)
+            {
+                //IP喇叭不带在分区的
+                if (e.Node.Parent == null && e.Node.Nodes.Count == 0)
+                {
+
+                }
+            }
+            else
+            {
+                //IP喇叭不带在分区的
+                if (e.Node.Parent == null && e.Node.Nodes.Count == 0)
+                {
+
+                }
+            }
+        }
+
+        string selectIP = "";
+
+        private void btn_SendTCP_Click(object sender, EventArgs e)
+        {
+            checkDeviceOnlineTcp(selectIP, 65005);
+        }
+
+        private void dGrid_devList_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if(DeviceList.Count>0)
+            selectIP = DeviceList[e.RowIndex].IPV4;
+        }
     }
 
 
