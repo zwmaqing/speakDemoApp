@@ -200,12 +200,14 @@ namespace speakDemoApp
 
     public class sendFarmesData
     {
-        public IPEndPoint IpEndPoint;
+        public IPEndPoint MultCommIpEndPoint;
+        public List<IPEndPoint> UnicastReceiver;
+
         public List<Byte[]> OriginalData;
 
         public sendFarmesData()
         {
-
+            UnicastReceiver = new List<IPEndPoint>();
         }
     }
 }

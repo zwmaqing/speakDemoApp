@@ -48,6 +48,9 @@ namespace speakDemoApp
             timer_Limit.Interval = 1000 * 15;
             timer_Limit.Tick += Timer_Limit_Tick;
 
+            UDPCommTimer.Elapsed += UDPCommTimer_Elapsed;
+            UDPCommTimer.AutoReset = false;
+
             filePath = Path.GetTempPath();
 
             //SearchDev
@@ -60,14 +63,23 @@ namespace speakDemoApp
             startReceiveConfirmData();//
 
             timer_AudioRequest.Tick += Timer_AudioRequest_Tick;
-            timer_AudioRequest.Interval = 400;
+            timer_AudioRequest.Interval = 700;
 
             timer_Countdown.Tick += Timer_Countdown_Tick;
+
+            //加载既有设备列表
+            loadDeviceInfoFromData();
 
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (speakMulticastCommDev.Count > 0 || speakUnicastCommDev.Count > 0)
+            {
+                e.Cancel = true;
+                MessageBox.Show("退出前请释放占用的设备！");
+                return;
+            }
             if (threadReceiveFile != null)
             {
                 receiveFileUdpClient.Close();
@@ -86,8 +98,6 @@ namespace speakDemoApp
                 confirmReceiveUdpClient.Close();
                 threadConfirmReceive.Abort();
             }
-
-
         }
 
 
@@ -161,11 +171,26 @@ namespace speakDemoApp
         private String fileName;
         private String filePath;
 
+
+
         //TCP 通信
         private ClientAsync tcpClient;
 
+        private deviceInfo selectDevice;//用户在设备列表里选定的设备信息缓存
+
+        private AuioRequestDev currentDev;//请求语音和退出语音时当前设备信息的缓存
+
+        private List<deviceInfo> speakMulticastCommDev = new List<deviceInfo>();
+        private List<deviceInfo> speakUnicastCommDev = new List<deviceInfo>();
+
         //收发文件数据
 
+        private sendFarmesData sendFarmes;
+
+        System.Timers.Timer UDPCommTimer = new System.Timers.Timer();
+
+        //UDP通信计时器到时标志
+        private bool udpCommTimed = false;
         //SearchDev
 
         public List<netCard> allCards = new List<netCard>();
@@ -210,6 +235,17 @@ namespace speakDemoApp
         private int ConfirmDevCount = 0;
 
         private UInt32 DelaySecMax = 0;
+
+        private void UDPCommTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            udpCommTimed = true;
+            if (threadSearchReceive != null)
+            {
+                receiveUdpSearchClient.Close();
+                // threadSearchReceive.Abort();
+                // threadSearchReceive = null;
+            }
+        }
 
         //确认信息端口
 
@@ -330,6 +366,145 @@ namespace speakDemoApp
             Start();
         }
 
+        //协商端口
+        private void multicastCommNegotiatePort()
+        {
+            if (speakMulticastCommDev.Count > 1)
+            {
+                multicastGroupPort.Clear();
+                isMultCommPortNegotiated = false;
+
+                QueryPort cmd = new QueryPort(Serial++);
+                var queryPortCMD = JsonConvert.SerializeObject(cmd);
+
+                startReceiveMulticastGroupPortData();//启动接收消息
+                groupSendData(queryPortCMD);//发送查询信息到设备组
+            }
+        }
+
+        private void setMultCommPort()
+        {
+            if (isMultCommPortNegotiated)
+            {
+                SetCommPort cmd = new SetCommPort(Serial++, speakVoiceMultCommPort, null);
+                var setMultCommPortCMD = JsonConvert.SerializeObject(cmd);
+
+                groupSendData(setMultCommPortCMD);
+            }
+        }
+
+        //收到的正在使用的语音通信组播端口号
+        private List<uint> multicastGroupPort = new List<uint>();
+
+        private uint speakVoiceMultCommPort = 65100;//协商后选定的组播端口号
+
+        private bool isMultCommPortNegotiated = false;
+
+        // 启动接收组播端口协商回复消息线程
+        private void startReceiveMulticastGroupPortData()
+        {
+            if (threadSearchReceive != null)
+            {
+                receiveUdpSearchClient.Close();
+                threadSearchReceive.Abort();
+                threadSearchReceive = null;
+            }
+
+            //判断IP是否有效
+            currentLocalIPV4 = GetLocalIP();
+            // 创建接收套接字
+            IPAddress localIp = IPAddress.Parse(currentLocalIPV4);//选定当前系统的IP
+            IPEndPoint localIpEndPoint = new IPEndPoint(localIp, SearchGroupEndPort);
+            try
+            {
+                receiveUdpSearchClient = new UdpClient(localIpEndPoint);
+            }
+            catch (SocketException sex)
+            {
+                MessageBox.Show(sex.Message, "发生错误");
+                return;
+            }
+
+            // 加入组播组接收组播信息
+            //！！！考虑不接受组播信息
+            if (isReceiveJoinGtoup)
+            {
+                receiveUdpSearchClient.JoinMulticastGroup(IPAddress.Parse(SearchGroupIp));
+                receiveUdpSearchClient.Ttl = 50;
+            }
+
+            udpCommTimed = false;
+            UDPCommTimer.Interval = 600;
+            UDPCommTimer.Start();
+            // 启动接受线程
+            threadSearchReceive = new Thread(receiveMulticastGroupPort);
+            threadSearchReceive.IsBackground = true;
+            threadSearchReceive.Start();
+        }
+
+        //接收端口协商回复信息的线程方法
+        private void receiveMulticastGroupPort()
+        {
+            IPEndPoint remoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
+            while (!udpCommTimed)
+            {
+                string receiveMessage = "";
+                try
+                {
+                    //关闭receiveUdpClient时此时会产生异常
+                    byte[] receiveBytes = receiveUdpSearchClient.Receive(ref remoteIpEndPoint);
+                    if (remoteIpEndPoint.Address.ToString() == currentLocalIPV4)
+                    {
+                        continue;
+                    }
+                    receiveMessage = Encoding.UTF8.GetString(receiveBytes);
+                    receiveMessageStr = receiveMessage;
+                    //分析信息内容
+                    // displayReceiveedMsg();
+                    //显示信息
+                }
+                catch (Exception ex)
+                {
+                    // MessageBox.Show(ex.Message);
+                }
+                try
+                {
+                    if (!String.IsNullOrEmpty(receiveMessage) && receiveMessage.Contains("QueryPort"))
+                    {
+                        QueryPortResult result = JsonConvert.DeserializeObject<QueryPortResult>(receiveMessage);
+                        if (!multicastGroupPort.Contains(result.Port))
+                        {
+                            multicastGroupPort.Add(result.Port);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // MessageBox.Show(ex.Message);
+                }
+            }
+            receiveUdpSearchClient.Close();
+
+            if (multicastGroupPort.Count < 1)
+            {
+                isMultCommPortNegotiated = true;
+                speakVoiceMultCommPort = 65100;
+            }
+            else
+            {
+                for (uint port = 65102; port < 65200; port += 2)
+                {
+                    if (!multicastGroupPort.Contains(port))
+                    {
+                        isMultCommPortNegotiated = true;
+                        speakVoiceMultCommPort = port;
+                        break;
+                    }
+                }
+            }
+            setMultCommPort();
+        }
+
         /// <summary>
         /// MouseUp 鼠标松开结束录音，（一并发送）
         /// </summary>
@@ -367,74 +542,12 @@ namespace speakDemoApp
         /// <param name="e"></param>
         private void btn_SendToDevice_Click(object sender, EventArgs e)
         {
-            thisRequestDevCount = 0;
-            busDeviceCount = 0;
-            ConfirmDevCount = 0;
-
             if (String.IsNullOrEmpty(fileName))
             {
                 MessageBox.Show("没有录音文件可供发送！请先录音.");
                 return;
             }
-
-            AuioRequestDev[] deviceArea = getUserSlectDeviceArea();
-
-            string requestCMD = JsonConvert.SerializeObject(deviceArea);
-
-            sendAudioRequest(deviceArea);
-
-            timer_AudioRequest.Start();
-        }
-
-        private void Timer_AudioRequest_Tick(object sender, EventArgs e)
-        {
-            timer_AudioRequest.Stop();
-            if (ConfirmDevCount > 0)
-            {
-                sendFileToDevice();
-
-                if (ConfirmDevCount != thisRequestDevCount)
-                {
-                    if (rText_RecordList.IsHandleCreated)
-                        rText_RecordList.BeginInvoke(new Action(delegate
-                          {
-                              //发送到UI 线程执行的代码
-                              rText_RecordList.Text += String.Format("有 {0} 台设备没有回应信息.\n", (thisRequestDevCount - ConfirmDevCount));
-                          }));
-                }
-            }
-            else
-            {
-                if (rText_RecordList.IsHandleCreated)
-                    rText_RecordList.BeginInvoke(new Action(delegate
-                    {
-                        //发送到UI 线程执行的代码
-                        rText_RecordList.Text += String.Format("没有收到设备回应信息，没有发送此次录音.\n", (thisRequestDevCount - ConfirmDevCount));
-                    }));
-            }
-            //尚未处理忙等待问题
-        }
-
-        /// <summary>
-        /// 发送过程
-        /// </summary>
-        private void sendFileToDevice()
-        {
-            sendFarmesData data = new sendFarmesData();
-            try
-            {
-                // 组播模式
-                IPEndPoint groupAudioIpEndPoint = new IPEndPoint(IPAddress.Parse(SendFileGroupIp), SendFileGroupPort);
-
-                data.IpEndPoint = groupAudioIpEndPoint;
-            }
-            catch
-            {
-                MessageBox.Show("目标设备IP地址错误!");
-                return;
-            }
-            lab_sendCount.Text = "0";
-
+            sendFarmes = new sendFarmesData();
             //原始数据分帧处理
             //c#文件流读文件 
             using (FileStream fsRead = new FileStream(filePath + fileName, FileMode.Open))
@@ -443,15 +556,119 @@ namespace speakDemoApp
                 byte[] heByte = new byte[fsLen];
                 int r = fsRead.Read(heByte, 0, heByte.Length);
 
-                data.OriginalData = DataFramePacker.BuildPackFrame(heByte, 0x01, 0x00);
+                sendFarmes.OriginalData = DataFramePacker.BuildPackFrame(heByte, 0x01, 0x00);
             }
 
-            if (data.OriginalData.Count > 0)
+            if (speakMulticastCommDev.Count > 1)
+            {
+                //需要组播发送
+                if (!isMultCommPortNegotiated)
+                {
+                    //还没有协商端口的情况
+
+                    //启动端口协商流程
+                    multicastCommNegotiatePort();
+                    //在到时的方法里启动发送
+                    timer_AudioRequest.Start();
+                    return;
+                }
+                else
+                {
+                    //已经协商取得端口了的,启动组播流程
+                    sendFileToDeviceMultComm();
+                }
+            }
+            //如果只有一个组播设备，则把他移到单播设备列表里去
+            if (speakMulticastCommDev.Count == 1 && !speakUnicastCommDev.Contains(speakMulticastCommDev[0]))
+            {
+                speakUnicastCommDev.Add(speakMulticastCommDev[0]);
+            }
+            //不需要组播了，启动单播流程
+            foreach (var one in speakUnicastCommDev)
+            {
+                sendFarmes.UnicastReceiver.Add(new IPEndPoint(IPAddress.Parse(one.IPV4), 65009));
+            }
+            sendFileToDeviceUnicastComm();
+        }
+
+        private void Timer_AudioRequest_Tick(object sender, EventArgs e)
+        {
+            timer_AudioRequest.Stop();
+            //组播发送
+            sendFileToDeviceMultComm();
+        }
+
+        //单播发送语音数据
+        private void sendFileToDeviceUnicastComm()
+        {
+            if (sendFarmes.OriginalData.Count > 0 && sendFarmes.UnicastReceiver.Count > 0)
             {
                 // 启动发送线程
-                Thread threadSend = new Thread(SendDataFarmes);
+                Thread threadSend = new Thread(unicastCommSendDataFarmes);
                 threadSend.IsBackground = true;
-                threadSend.Start(data);
+                threadSend.Start(sendFarmes);
+            }
+        }
+
+        private void unicastCommSendDataFarmes(object data)
+        {
+            sendFarmesData farmes = (sendFarmesData)data;
+            using (var sendFileUdpUnicastClient = new UdpClient())
+            {
+                Stopwatch sw;
+
+                int count = 0;
+
+                long usedTimeMaxTicks = 0;
+
+                foreach (var one in farmes.OriginalData)
+                {
+                    sw = Stopwatch.StartNew();//开始计时
+                    foreach (var oneIP in farmes.UnicastReceiver)
+                    {
+                        sendFileUdpUnicastClient.Send(one, one.Length, oneIP);
+                    }
+                    sw.Stop();
+                    if (sw.ElapsedTicks > usedTimeMaxTicks)
+                        usedTimeMaxTicks = sw.ElapsedTicks;//花费的时长
+
+                    count++;
+
+                    Thread.Sleep((int)numb_FrameInterval.Value);//等候5毫秒
+                }
+                if (lab_sendCount.IsHandleCreated)
+                    lab_sendCount.BeginInvoke(new Action(delegate
+                    {
+                        //发送到UI 线程执行的代码
+                        rText_RecordList.Text += String.Format("单播每帧最大时长 {0} Ticks", usedTimeMaxTicks);
+                        lab_sendCount.Text = count.ToString();
+                    }));
+            }
+        }
+
+        /// <summary>
+        /// 发送过程
+        /// </summary>
+        private void sendFileToDeviceMultComm()
+        {
+            try
+            {
+                // 组播模式
+                IPEndPoint groupAudioIpEndPoint = new IPEndPoint(IPAddress.Parse(SendFileGroupIp), (int)speakVoiceMultCommPort);
+                sendFarmes.MultCommIpEndPoint = groupAudioIpEndPoint;
+            }
+            catch
+            {
+                MessageBox.Show("目标设备IP地址错误!");
+                return;
+            }
+
+            if (sendFarmes.OriginalData.Count > 0)
+            {
+                // 启动发送线程
+                Thread threadSend = new Thread(multCommSendDataFarmes);
+                threadSend.IsBackground = true;
+                threadSend.Start(sendFarmes);
             }
         }
 
@@ -462,7 +679,7 @@ namespace speakDemoApp
             btn_SendToDevice.Enabled = true;
         }
 
-        private void SendDataFarmes(object data)
+        private void multCommSendDataFarmes(object data)
         {
             sendFarmesData farmes = (sendFarmesData)data;
             using (sendFileUdpClient = new UdpClient())
@@ -470,7 +687,7 @@ namespace speakDemoApp
                 int count = 0;
                 foreach (var one in farmes.OriginalData)
                 {
-                    sendFileUdpClient.Send(one, one.Length, farmes.IpEndPoint);
+                    sendFileUdpClient.Send(one, one.Length, farmes.MultCommIpEndPoint);
                     count++;
                     if (lab_sendCount.IsHandleCreated)
                         lab_sendCount.BeginInvoke(new Action(delegate
@@ -481,6 +698,8 @@ namespace speakDemoApp
 
                     Thread.Sleep((int)numb_FrameInterval.Value);//等候5毫秒
                 }
+
+                //发送完毕，显示状态信息和开启功能禁用
                 if (lab_sendCount.IsHandleCreated)
                     lab_sendCount.BeginInvoke(new Action(delegate
                     {
@@ -782,7 +1001,7 @@ namespace speakDemoApp
 
         private void btn_SearchDev_Click(object sender, EventArgs e)
         {
-            BindDeviceList.Clear();//清除既有设备数据
+            // BindDeviceList.Clear();//清除既有设备数据
             CurrentDev = null;//清除设置设备ip命令标志
                               //  lab_devCount.Text = "0";
             var localIP = GetLocalIP();//获取电脑当前本地IP
@@ -809,7 +1028,15 @@ namespace speakDemoApp
             // 创建接收套接字
             IPAddress localIp = IPAddress.Parse(currentLocalIPV4);//选定当前系统的IP
             IPEndPoint localIpEndPoint = new IPEndPoint(localIp, SearchGroupEndPort);
-            receiveUdpSearchClient = new UdpClient(localIpEndPoint);
+            try
+            {
+                receiveUdpSearchClient = new UdpClient(localIpEndPoint);
+            }
+            catch (SocketException sex)
+            {
+                MessageBox.Show(sex.Message, "发生错误");
+                return;
+            }
 
             // 加入组播组接收组播信息
             //！！！考虑不接受组播信息
@@ -819,6 +1046,9 @@ namespace speakDemoApp
                 receiveUdpSearchClient.Ttl = 50;
             }
 
+            udpCommTimed = false;
+            UDPCommTimer.Interval = 1000;
+            UDPCommTimer.Start();
             // 启动接受线程
             threadSearchReceive = new Thread(ReceiveMessage);
             threadSearchReceive.IsBackground = true;
@@ -829,7 +1059,7 @@ namespace speakDemoApp
         private void ReceiveMessage()
         {
             IPEndPoint remoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            while (true)
+            while (!udpCommTimed)
             {
                 string receiveMessage = "";
                 try
@@ -867,10 +1097,15 @@ namespace speakDemoApp
                         {
                             bool ex = false;
                             deviceInfo oneDev = JsonConvert.DeserializeObject<deviceInfo>(receiveMessage);
+                            oneDev.IsOnLine = true;
+                            oneDev.IsMulticastTo = true;
                             foreach (var one in BindDeviceList)
                             {
                                 if (one.SN == oneDev.SN)
                                 {
+                                    one.IsMulticastTo = true;
+                                    one.IsOnLine = true;
+                                    one.IPV4 = oneDev.IPV4;
                                     ex = true;
                                     break;
                                 }
@@ -880,8 +1115,8 @@ namespace speakDemoApp
                                 this.dGrid_devList.BeginInvoke(new Action(delegate
                                 {
                                     //发送到UI 线程执行的代码
-
                                     BindDeviceList.Add(oneDev);
+                                    this.dGrid_devList.Refresh();
                                 }));
                         }
                     }
@@ -891,7 +1126,10 @@ namespace speakDemoApp
                     // MessageBox.Show(ex.Message);
                 }
             }
+
+            receiveUdpSearchClient.Close();
         }
+
 
         private void displayReceiveedMsg()
         {
@@ -938,7 +1176,6 @@ namespace speakDemoApp
                 sendUdpClient.Close();
             }
         }
-
 
 
         public string HttpGet(string Url, Dictionary<string, string> parameters)
@@ -988,11 +1225,16 @@ namespace speakDemoApp
                 MessageBox.Show("没有可供检索的设备，请先搜索设备。");
                 return;
             }
+            freeAllAppliedDev();
             tree_Area.Nodes.Clear();
+            //考虑通知已经打开的设备
+            //去除已选语音接受设备列表
+            speakMulticastCommDev.Clear();
+            speakUnicastCommDev.Clear();
 
             foreach (var one in BindDeviceList)
             {
-                if (one.Type == "IPTRUMPET")
+                if (one.Type == "IPTRUMPET" && one.IsOnLine)
                 {
                     TreeNode node = new TreeNode();
                     node.Name = one.AliasName;
@@ -1002,7 +1244,7 @@ namespace speakDemoApp
                     tree_Area.Nodes.Add(node);//插入
 
                 }
-                else if (one.Type == "IPCHPOWER")
+                else if (one.Type == "IPCHPOWER" && one.IsOnLine)
                 {
                     TreeNode node = new TreeNode();//设备节点
                     node.Name = one.AliasName;
@@ -1150,13 +1392,13 @@ namespace speakDemoApp
 
         private void sendAudioRequest(AuioRequestDev[] devArea)
         {
-            AuioRequest requeest = new AuioRequest();
-            requeest.CMD = "RecordSpeak";
-            requeest.CodingStandard = "WAV";
-            requeest.Serial = ++Serial;
-            requeest.Devices = devArea;
+            AuioRequests request = new AuioRequests();
+            request.CMD = "RecordSpeak";
+            request.CodingStandard = "WAV";
+            request.Serial = ++Serial;
+            request.Devices = devArea;
 
-            var searchCMD = JsonConvert.SerializeObject(requeest);
+            var searchCMD = JsonConvert.SerializeObject(request);
 
             groupSendData(searchCMD);//发送查询信息到设备组
         }
@@ -1231,6 +1473,13 @@ namespace speakDemoApp
 
             //判断IP是否有效
             currentLocalIPV4 = GetLocalIP();
+
+            if (String.IsNullOrEmpty(currentLocalIPV4))
+            {
+                MessageBox.Show("当前电脑没有有效的网络设备！");
+                return;
+            }
+
             // 创建接收套接字
             IPAddress localIp = IPAddress.Parse(currentLocalIPV4);//选定当前系统的IP
             IPEndPoint localIpEndPoint = new IPEndPoint(localIp, confirmReceiveUdpPort);
@@ -1297,7 +1546,10 @@ namespace speakDemoApp
 
         }
 
-        private void checkDeviceOnlineTcp(string remoteIP, int port)
+        /// <summary>
+        /// 检查设备是否在线，TCP方法
+        /// </summary>
+        private void checkDeviceOnlineTcp()
         {
             tcpClient = new ClientAsync();
 
@@ -1329,15 +1581,216 @@ namespace speakDemoApp
 
             tcpClient.Received += new Action<string, string>((key, msg) =>
             {
-                rText_RecordList.Invoke(new MethodInvoker(
-                              delegate
-                              {
-                                  rText_RecordList.Text += String.Format("收到{0}发来的信息：{1}", key, msg);
-                              }
-                              ));
-            });
+                if (msg.Contains("SoftwareVersion"))
+                {
+                    bool ex = false;
+                    deviceInfo result = JsonConvert.DeserializeObject<deviceInfo>(msg);
+                    result.IsOnLine = true;
+                    result.IsMulticastTo = false;
+                    foreach (var one in BindDeviceList)
+                    {
+                        if (one.SN == result.SN)
+                        {
+                            one.IsOnLine = true;
+                            one.IsMulticastTo = false;
+                            ex = true;
+                            break;
+                        }
+                    }
 
-            tcpClient.ConnectAsync(remoteIP, port);
+                    if (this.dGrid_devList.IsHandleCreated && !ex && result.SN.Length > 0)
+                        this.dGrid_devList.BeginInvoke(new Action(delegate
+                        {
+                            //发送到UI 线程执行的代码
+                            result.IsOnLine = true;
+                            result.IsMulticastTo = false;
+                            BindDeviceList.Add(result);
+                        }));
+                }
+            });
+        }
+
+
+        private void recordSpeakApplyFor(AuioRequestDev dev)
+        {
+            currentDev = dev;
+
+            tcpClient = new ClientAsync();
+
+            tcpClient.Completed -= TcpClient_Completed_SpeakApplyFor;
+            tcpClient.Completed += TcpClient_Completed_SpeakApplyFor;
+            tcpClient.Received -= TcpClient_Received_SpeakApplyFor;
+            tcpClient.Received += TcpClient_Received_SpeakApplyFor;
+
+        }
+
+        private void TcpClient_Received_SpeakApplyFor(string key, string msg)
+        {
+            if (msg.Contains("Response") && msg.Contains("RecordSpeak"))
+            {
+                bool ex = false;
+                AuioRequestResult result = JsonConvert.DeserializeObject<AuioRequestResult>(msg);
+                if (!result.Accept)
+                {
+                    foreach (TreeNode oneNode in tree_Area.Nodes)
+                    {
+                        tree_Area.Invoke(new MethodInvoker(
+                          delegate
+                          {
+                              oneNode.Checked = false;
+                          }
+                          ));
+                        break;
+                    }
+                    MessageBox.Show("该设备忙，不接受请求，请稍后再试.", "提示信息");
+                }
+                else
+                {
+                    deviceInfo theDev = DeviceList.Find(x => x.SN == result.SN);
+                    if (theDev.IsMulticastTo)
+                    {
+                        speakMulticastCommDev.Add(theDev);
+                    }
+                    else
+                    {
+                        speakUnicastCommDev.Add(theDev);
+                    }
+                }
+            }
+        }
+
+        private void TcpClient_Completed_SpeakApplyFor(TcpClient c, EnSocketAction enAction)
+        {
+            switch (enAction)
+            {
+                case EnSocketAction.ConnectTimeOut:
+                    {
+                        rText_RecordList.Invoke(new MethodInvoker(
+                            delegate
+                            {
+                                rText_RecordList.Text += String.Format("连接服务端超时!");
+                            }
+                            ));
+                        break;
+                    }
+                case EnSocketAction.Connect:
+                    {
+                        var localIP = GetLocalIP();//获取电脑当前本地IP
+                        int[] gtoup = new int[0];
+
+                        AuioRequest cmd = new AuioRequest("RecordSpeak", Serial++, "WAV", new AuioRequestDev(currentDev.SN, gtoup));
+                        var requestCMD = JsonConvert.SerializeObject(cmd);
+                        tcpClient.SendAsync(requestCMD);
+                        break;
+                    }
+            }
+        }
+
+
+        private void recordSpeakEndApplyFor(AuioRequestDev dev)
+        {
+            currentDev = dev;
+
+            tcpClient = new ClientAsync();
+            tcpClient.Completed -= TcpClient_Completed_SpeakEndApplyFor;
+            tcpClient.Completed += TcpClient_Completed_SpeakEndApplyFor;
+            tcpClient.Received -= TcpClient_Received_SpeakEndApplyFor;
+            tcpClient.Received += TcpClient_Received_SpeakEndApplyFor;
+
+            deviceInfo theDev = DeviceList.Find(x => x.SN == dev.SN);
+            speakMulticastCommDev.Remove(theDev);
+            speakUnicastCommDev.Remove(theDev);
+        }
+
+
+        private void TcpClient_Received_SpeakEndApplyFor(string key, string msg)
+        {
+            if (msg.Contains("Response") && msg.Contains("RecordSpeakEnd"))
+            {
+                bool ex = false;
+                AuioRequestEndResult result = JsonConvert.DeserializeObject<AuioRequestEndResult>(msg);
+                if (!result.SpeakBusy)
+                {
+                    foreach (TreeNode oneNode in tree_Area.Nodes)
+                    {
+                        tree_Area.Invoke(new MethodInvoker(
+                          delegate
+                          {
+                              if (oneNode.Checked)
+                                  oneNode.Checked = false;
+                          }
+                          ));
+                        break;
+                    }
+                }
+            }
+
+            rText_RecordList.Invoke(new MethodInvoker(
+                          delegate
+                          {
+                              rText_RecordList.Text += String.Format("收到{0}发来的信息：{1}", key, msg);
+                          }
+                          ));
+        }
+
+        private void TcpClient_Completed_SpeakEndApplyFor(TcpClient c, EnSocketAction enAction)
+        {
+            switch (enAction)
+            {
+                case EnSocketAction.ConnectTimeOut:
+                    {
+                        rText_RecordList.Invoke(new MethodInvoker(
+                            delegate
+                            {
+                                rText_RecordList.Text += String.Format("连接服务端超时!");
+                            }
+                            ));
+                        break;
+                    }
+                case EnSocketAction.Connect:
+                    {
+                        var localIP = GetLocalIP();//获取电脑当前本地IP
+                        int[] gtoup = new int[0];
+
+                        AuioRequest cmd = new AuioRequest("RecordSpeakEnd", Serial++, "WAV", new AuioRequestDev(currentDev.SN, gtoup));
+                        var requestCMD = JsonConvert.SerializeObject(cmd);
+                        tcpClient.SendAsync(requestCMD);
+                        break;
+                    }
+            }
+        }
+
+        /// <summary>
+        /// 获取功放类设备用户选择的输出分区
+        /// </summary>
+        /// <param name="devNode"></param>
+        /// <returns></returns>
+        private AuioRequestDev getPowerSelectGroups(TreeNode devNode)
+        {
+            AuioRequestDev netDev = null;
+            List<int> groups = new List<int>();
+            foreach (TreeNode oneCH in devNode.Nodes[0].Nodes)
+            {
+                if (oneCH.Checked)
+                {
+                    groups.Add((int)oneCH.Tag);
+                }
+            }
+            if (devNode.Nodes.Count > 1)
+            {
+                foreach (TreeNode oneGroup in devNode.Nodes[1].Nodes)
+                {
+                    if (oneGroup.Checked)
+                    {
+                        groups.Add((int)oneGroup.Tag);
+                    }
+                }
+            }
+
+            netDev = new AuioRequestDev();
+            netDev.SN = ((deviceInfo)devNode.Tag).SN;
+            netDev.Groups = groups.ToArray();
+            return netDev;
         }
 
         private void tree_Area_Leave(object sender, EventArgs e)
@@ -1347,41 +1800,165 @@ namespace speakDemoApp
 
         private void btn_AddDevice_Click(object sender, EventArgs e)
         {
-            AddDeviceForm addform = new AddDeviceForm();
+            tcpClient = new ClientAsync();
+            checkDeviceOnlineTcp();
+            AddDeviceForm addform = new AddDeviceForm(tcpClient);
             addform.ShowDialog(this);
+
         }
 
         private void tree_Area_BeforeCheck(object sender, TreeViewCancelEventArgs e)
         {
             if (e.Node.Checked)
             {
+                //取消
                 //IP喇叭不带在分区的
-                if (e.Node.Parent == null && e.Node.Nodes.Count == 0)
+                if (e.Node.Parent == null)
                 {
-
+                    deviceInfo theDevice = (deviceInfo)e.Node.Tag;
+                    if (e.Node.Nodes.Count == 0)
+                    {
+                        recordSpeakEndApplyFor(new AuioRequestDev(theDevice.SN, new int[0]));
+                        tcpClient.ConnectAsync(theDevice.IPV4, 65005);
+                    }
+                    else
+                    {
+                        AuioRequestDev devGroup = getPowerSelectGroups(e.Node);
+                        recordSpeakEndApplyFor(devGroup);
+                        tcpClient.ConnectAsync(theDevice.IPV4, 65005);
+                    }
                 }
             }
             else
             {
+                //选中
                 //IP喇叭不带在分区的
-                if (e.Node.Parent == null && e.Node.Nodes.Count == 0)
+                if (e.Node.Parent == null)
+                {
+                    deviceInfo theDevice = (deviceInfo)e.Node.Tag;
+                    if (e.Node.Nodes.Count == 0)
+                    {
+                        recordSpeakApplyFor(new AuioRequestDev(theDevice.SN, new int[0]));
+                        tcpClient.ConnectAsync(theDevice.IPV4, 65005);
+                    }
+                    else
+                    {
+                        AuioRequestDev devGroup = getPowerSelectGroups(e.Node);
+                        recordSpeakApplyFor(devGroup);
+                        tcpClient.ConnectAsync(theDevice.IPV4, 65005);
+
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 释放所有申请的设备，
+        /// </summary>
+        private void freeAllAppliedDev()
+        {
+            if (speakMulticastCommDev.Count > 0)
+            {
+                List<AuioRequestDev> deviceList = new List<AuioRequestDev>();
+                foreach (var one in speakMulticastCommDev)
+                {
+                    AuioRequestDev oneDev = new AuioRequestDev(one.SN, new int[0]);
+                    deviceList.Add(oneDev);
+                }
+
+                AuioRequests request = new AuioRequests();
+                request.CMD = "RecordSpeakEnd";
+                request.CodingStandard = "WAV";
+                request.Serial = ++Serial;
+                request.Devices = deviceList.ToArray();
+
+                var requestCMD = JsonConvert.SerializeObject(request);
+
+                groupSendData(requestCMD);//发送查询信息到设备组
+                speakMulticastCommDev.Clear();
+            }
+            if (speakUnicastCommDev.Count > 0)
+            {
+                try
+                {
+                    foreach (var one in speakUnicastCommDev)
+                    {
+                        recordSpeakEndApplyFor(new AuioRequestDev(one.SN, new int[0]));
+                        tcpClient.ConnectAsync(one.IPV4, 65005);
+                    }
+                }
+                catch (Exception ex)
                 {
 
                 }
             }
         }
 
-        string selectIP = "";
-
         private void btn_SendTCP_Click(object sender, EventArgs e)
         {
-            checkDeviceOnlineTcp(selectIP, 65005);
+
         }
 
         private void dGrid_devList_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if(DeviceList.Count>0)
-            selectIP = DeviceList[e.RowIndex].IPV4;
+            if (DeviceList.Count > 0)
+                selectDevice = DeviceList[e.RowIndex];
+        }
+
+        private void btn_SaveDeviceList_Click(object sender, EventArgs e)
+        {
+            foreach (var one in DeviceList)
+            {
+                one.IsMulticastTo = false;
+                one.IsOnLine = false;
+            }
+            var requestCMD = JsonConvert.SerializeObject(DeviceList);
+            string filePath = Application.StartupPath + "/" + "device.dat";
+            StreamWriter str = File.CreateText(filePath);
+            str.Write(requestCMD);
+            str.Close();
+            MessageBox.Show("数据已存储!");
+        }
+
+        private void loadDeviceInfoFromData()
+        {
+            string filePath = Application.StartupPath + "/" + "device.dat";
+            string data = File.ReadAllText(filePath);
+            if (!String.IsNullOrEmpty(data))
+            {
+                try
+                {
+                    List<deviceInfo> result = JsonConvert.DeserializeObject<List<deviceInfo>>(data);
+                    if (result.Count > 0)
+                    {
+                        foreach (var one in result)
+                        {
+                            BindDeviceList.Add(one);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("加载数据发生错误!");
+                }
+            }
+        }
+
+        private void btn_DelDevice_Click(object sender, EventArgs e)
+        {
+            if (selectDevice != null)
+            {
+                string message = "真的要删除 " + selectDevice.IPV4 + " 设备信息？";
+                string caption = "请选择是否删除信息";
+                MessageBoxButtons buttons = MessageBoxButtons.YesNo;
+                DialogResult result = MessageBox.Show(message, caption, buttons);
+
+                if (result == System.Windows.Forms.DialogResult.Yes)
+                {
+                    // 操作
+                    BindDeviceList.Remove(selectDevice);
+                }
+            }
         }
     }
 
@@ -1419,6 +1996,7 @@ namespace speakDemoApp
 
     public class deviceInfo
     {
+        public Int64 TerminalID { get; set; }
         public string AliasName { get; set; }
         public string Type { get; set; }
         public string HardwareVersion { get; set; }
@@ -1430,6 +2008,18 @@ namespace speakDemoApp
         public string SubnetMask { get; set; }
         public string Gateway { get; set; }
         public string DNS { get; set; }
+        public String MAC { get; set; }
+        public String IPV6 { get; set; }
+
+        public bool IsOnLine { get; set; }
+        public bool IsMulticastTo { get; set; }
+        public String TaskStatus { get; set; }
+        public bool SpeakBusy { get; set; }
+        public String MonitorStatus { get; set; }
+        public Int32 DefaultVolume { get; set; }
+        public String ModeStr { get; set; }
+
+
 
         public deviceInfo() { }
 
@@ -1473,6 +2063,21 @@ namespace speakDemoApp
     {
         public string SN;
         public int[] Groups;
+        public AuioRequestDev() { }
+        public AuioRequestDev(string sn, int[] groups)
+        {
+            SN = sn;
+            Groups = groups;
+        }
+    }
+
+    public class AuioRequests
+    {
+        public string CMD;
+        public UInt32 Serial;
+        public string CodingStandard;
+        public AuioRequestDev[] Devices;
+
     }
 
     public class AuioRequest
@@ -1480,7 +2085,15 @@ namespace speakDemoApp
         public string CMD;
         public UInt32 Serial;
         public string CodingStandard;
-        public AuioRequestDev[] Devices;
+        public AuioRequestDev Devices;
+        public AuioRequest() { }
+        public AuioRequest(string cmd, UInt32 serial, string codingStandard, AuioRequestDev devices)
+        {
+            CMD = cmd;
+            Serial = serial;
+            CodingStandard = codingStandard;
+            Devices = devices;
+        }
     }
 
     public class LoginDeviceResult
@@ -1524,5 +2137,60 @@ namespace speakDemoApp
         public UInt32 DelaySec;
     }
 
+    public class AuioRequestEndResult
+    {
+        public string Type;
+        public string CMD;
+        public bool SpeakBusy;
+        public UInt32 Serial;
+        public AuioRequestDev Devices;
+    }
 
+    public class QueryPort
+    {
+        public string CMD;
+        public string Channel;
+        public UInt32 Serial;
+        public QueryPort(UInt32 serial)
+        {
+            CMD = "QueryPort";
+            Channel = "VoiceSpeak";
+            Serial = serial;
+        }
+    }
+
+    public class QueryPortResult
+    {
+        public string Type;
+        public string CMD;
+        public string SN;
+        public UInt32 Serial;
+        public UInt32 Port;
+    }
+
+    public class SetCommPort
+    {
+        public string CMD;
+        public string Channel;
+        public UInt32 Serial;
+        public UInt32 Port;
+        public AuioRequestDev[] Devices;
+        public SetCommPort(UInt32 serial, UInt32 port, AuioRequestDev[] devices)
+        {
+            CMD = "SetCommPort";
+            Channel = "VoiceSpeak";
+            Serial = serial;
+            Port = port;
+            Devices = devices;
+        }
+    }
+
+    public class SetCommPortResult
+    {
+        public string Type;
+        public string CMD;
+        public string Channel;
+        public UInt32 Serial;
+        public UInt32 Port;
+    }
 }

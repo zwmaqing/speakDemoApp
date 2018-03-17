@@ -31,11 +31,13 @@
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.btn_DelDevice = new System.Windows.Forms.Button();
+            this.btn_SaveDeviceList = new System.Windows.Forms.Button();
             this.btn_AddDevice = new System.Windows.Forms.Button();
             this.tree_Area = new System.Windows.Forms.TreeView();
             this.btn_RetrieveArea = new System.Windows.Forms.Button();
             this.label9 = new System.Windows.Forms.Label();
-            this.btn_SearchDev = new System.Windows.Forms.Button();
+            this.btn_SearchRefreshDev = new System.Windows.Forms.Button();
             this.dGrid_devList = new System.Windows.Forms.DataGridView();
             this.AliasName = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.Type = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -73,11 +75,13 @@
             // 
             // groupBox1
             // 
+            this.groupBox1.Controls.Add(this.btn_DelDevice);
+            this.groupBox1.Controls.Add(this.btn_SaveDeviceList);
             this.groupBox1.Controls.Add(this.btn_AddDevice);
             this.groupBox1.Controls.Add(this.tree_Area);
             this.groupBox1.Controls.Add(this.btn_RetrieveArea);
             this.groupBox1.Controls.Add(this.label9);
-            this.groupBox1.Controls.Add(this.btn_SearchDev);
+            this.groupBox1.Controls.Add(this.btn_SearchRefreshDev);
             this.groupBox1.Controls.Add(this.dGrid_devList);
             this.groupBox1.Controls.Add(this.label8);
             this.groupBox1.Controls.Add(this.txt_LoginPass);
@@ -90,9 +94,29 @@
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "收听设备";
             // 
+            // btn_DelDevice
+            // 
+            this.btn_DelDevice.Location = new System.Drawing.Point(272, 11);
+            this.btn_DelDevice.Name = "btn_DelDevice";
+            this.btn_DelDevice.Size = new System.Drawing.Size(75, 21);
+            this.btn_DelDevice.TabIndex = 16;
+            this.btn_DelDevice.Text = "删除设备";
+            this.btn_DelDevice.UseVisualStyleBackColor = true;
+            this.btn_DelDevice.Click += new System.EventHandler(this.btn_DelDevice_Click);
+            // 
+            // btn_SaveDeviceList
+            // 
+            this.btn_SaveDeviceList.Location = new System.Drawing.Point(353, 11);
+            this.btn_SaveDeviceList.Name = "btn_SaveDeviceList";
+            this.btn_SaveDeviceList.Size = new System.Drawing.Size(75, 21);
+            this.btn_SaveDeviceList.TabIndex = 15;
+            this.btn_SaveDeviceList.Text = "存储设备列表";
+            this.btn_SaveDeviceList.UseVisualStyleBackColor = true;
+            this.btn_SaveDeviceList.Click += new System.EventHandler(this.btn_SaveDeviceList_Click);
+            // 
             // btn_AddDevice
             // 
-            this.btn_AddDevice.Location = new System.Drawing.Point(264, 11);
+            this.btn_AddDevice.Location = new System.Drawing.Point(191, 11);
             this.btn_AddDevice.Name = "btn_AddDevice";
             this.btn_AddDevice.Size = new System.Drawing.Size(75, 21);
             this.btn_AddDevice.TabIndex = 14;
@@ -131,20 +155,21 @@
             this.label9.TabIndex = 11;
             this.label9.Text = "选择收听的区域：";
             // 
-            // btn_SearchDev
+            // btn_SearchRefreshDev
             // 
-            this.btn_SearchDev.Location = new System.Drawing.Point(356, 11);
-            this.btn_SearchDev.Name = "btn_SearchDev";
-            this.btn_SearchDev.Size = new System.Drawing.Size(72, 21);
-            this.btn_SearchDev.TabIndex = 9;
-            this.btn_SearchDev.Text = "搜索设备";
-            this.toolTip1.SetToolTip(this.btn_SearchDev, "搜索广播设备");
-            this.btn_SearchDev.UseVisualStyleBackColor = true;
-            this.btn_SearchDev.Click += new System.EventHandler(this.btn_SearchDev_Click);
+            this.btn_SearchRefreshDev.Location = new System.Drawing.Point(113, 11);
+            this.btn_SearchRefreshDev.Name = "btn_SearchRefreshDev";
+            this.btn_SearchRefreshDev.Size = new System.Drawing.Size(72, 21);
+            this.btn_SearchRefreshDev.TabIndex = 9;
+            this.btn_SearchRefreshDev.Text = "刷新设备";
+            this.toolTip1.SetToolTip(this.btn_SearchRefreshDev, "搜索广播设备");
+            this.btn_SearchRefreshDev.UseVisualStyleBackColor = true;
+            this.btn_SearchRefreshDev.Click += new System.EventHandler(this.btn_SearchDev_Click);
             // 
             // dGrid_devList
             // 
             this.dGrid_devList.AllowUserToAddRows = false;
+            this.dGrid_devList.AllowUserToResizeRows = false;
             this.dGrid_devList.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dGrid_devList.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
             this.AliasName,
@@ -154,7 +179,9 @@
             this.HardwareVersion,
             this.SoftwareVersion});
             this.dGrid_devList.Location = new System.Drawing.Point(6, 38);
+            this.dGrid_devList.MultiSelect = false;
             this.dGrid_devList.Name = "dGrid_devList";
+            this.dGrid_devList.ReadOnly = true;
             this.dGrid_devList.RowHeadersVisible = false;
             this.dGrid_devList.RowTemplate.Height = 23;
             this.dGrid_devList.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
@@ -170,36 +197,42 @@
             this.AliasName.DataPropertyName = "AliasName";
             this.AliasName.HeaderText = "设备别名";
             this.AliasName.Name = "AliasName";
+            this.AliasName.ReadOnly = true;
             // 
             // Type
             // 
             this.Type.DataPropertyName = "Type";
             this.Type.HeaderText = "类型";
             this.Type.Name = "Type";
+            this.Type.ReadOnly = true;
             // 
             // SN
             // 
             this.SN.DataPropertyName = "SN";
             this.SN.HeaderText = "序列号";
             this.SN.Name = "SN";
+            this.SN.ReadOnly = true;
             // 
             // IPV4
             // 
             this.IPV4.DataPropertyName = "IPV4";
             this.IPV4.HeaderText = "IP地址";
             this.IPV4.Name = "IPV4";
+            this.IPV4.ReadOnly = true;
             // 
             // HardwareVersion
             // 
             this.HardwareVersion.DataPropertyName = "HardwareVersion";
             this.HardwareVersion.HeaderText = "硬件版本";
             this.HardwareVersion.Name = "HardwareVersion";
+            this.HardwareVersion.ReadOnly = true;
             // 
             // SoftwareVersion
             // 
             this.SoftwareVersion.DataPropertyName = "SoftwareVersion";
             this.SoftwareVersion.HeaderText = "软件版本";
             this.SoftwareVersion.Name = "SoftwareVersion";
+            this.SoftwareVersion.ReadOnly = true;
             // 
             // label8
             // 
@@ -492,7 +525,7 @@
         private System.Windows.Forms.Label label7;
         private System.Windows.Forms.TextBox txt_LoginName;
         private System.Windows.Forms.Label lab_sendCount;
-        private System.Windows.Forms.Button btn_SearchDev;
+        private System.Windows.Forms.Button btn_SearchRefreshDev;
         private System.Windows.Forms.DataGridView dGrid_devList;
         private System.Windows.Forms.Label label9;
         private System.Windows.Forms.ComboBox cmb_BitsPerSample;
@@ -508,6 +541,8 @@
         private System.Windows.Forms.Button btn_AddDevice;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Button btn_SendTCP;
+        private System.Windows.Forms.Button btn_SaveDeviceList;
+        private System.Windows.Forms.Button btn_DelDevice;
     }
 }
 

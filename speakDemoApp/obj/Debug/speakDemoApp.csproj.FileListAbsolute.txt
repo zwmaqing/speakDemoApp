@@ -13,3 +13,4 @@ J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp
 J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\speakDemoApp.exe.config
 J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\TCPHelper.dll
 J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\bin\Debug\TCPHelper.pdb
+J:\My work space simultaneously\MyDotNETProject\Vs2013\speakDemoApp\speakDemoApp\obj\Debug\speakDemoApp.Form2.resources

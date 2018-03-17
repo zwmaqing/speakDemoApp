@@ -71,7 +71,9 @@ namespace TCPHelper
                 }
                 else
                 {
-                    throw socketexception;
+                    // socketexception = new SocketException();
+                    // throw  socketexception;
+                    OnComplete(client, EnSocketAction.ConnectTimeOut);
                 }
             }
             else
@@ -133,6 +135,7 @@ namespace TCPHelper
             catch (SocketException ex)
             {
                 IsConnectionSuccessful = false;
+                socketexception = ex;
                 if (ex.SocketErrorCode == SocketError.TimedOut)
                     OnComplete(client, EnSocketAction.ConnectTimeOut);
             }
